@@ -22,7 +22,7 @@ conda install -c bioconda kraken2 bracken kneaddata trimmomatic bowtie2
 ### From Source
 
 ```bash
-git clone https://github.com/yourusername/abs_quant.git
+git clone https://github.com/nacin0910/abs_quant.git
 cd abs_quant
 pip install -e .
 ```
