@@ -7,11 +7,11 @@
 
 ### 1. 安装
 
-#### 通过Conda安装（推荐）
+#### 通过Conda安装
 
 ```bash
-# 克隆仓库
-git clone https://github.com/yourusername/abs_quant.git
+# 克隆仓库（也可选择下载安装包后解压）
+git clone https://github.com/nacin0910/abs_quant.git
 cd abs_quant
 
 # 创建conda环境
@@ -22,11 +22,6 @@ conda activate abs_quant
 pip install -e .
 ```
 
-#### 通过Pip安装
-
-```bash
-pip install abs_quant
-```
 
 ### 2. 数据库配置
 
@@ -79,7 +74,7 @@ results/
 
 ## 📊 绝对定量原理
 
-本流程使用以下两种spike-in细菌进行绝对定量：
+本流程使用以下两种spike-in细菌进行绝对定量，细胞数均为2 x 10^7 per prep (20 μl)
 
 | 细菌 | Taxonomy ID | 基因组大小 | 革兰氏染色 |
 |------|-------------|------------|------------|
@@ -90,17 +85,18 @@ results/
 - 对于革兰氏阳性菌：`丰度 = 20,000,000 × (reads_x / genome_size_x) / (reads_AH / AH_size)`
 - 对于革兰氏阴性菌：`丰度 = 20,000,000 × (reads_x / genome_size_x) / (reads_IH / IH_size)`
 - 对于未知染色菌：`丰度 = 40,000,000 × (reads_x / genome_size_x) / (reads_AH/AH_size + reads_IH/IH_size)`
+- 如果spike-in的添加量不是20 μl，只需按比例换算（例如：添加了40 μl，则将计算出的绝对丰度×2）
 
 ## 🔧 依赖软件
 
-本流程依赖于以下软件，推荐通过conda安装：
+本流程依赖于以下软件，将会在创建conda环境时安装：
 
 - **Kraken2** (v2.1.2+) - 快速分类器
 - **Bracken** (v2.7+) - 丰度估计
 - **Kneaddata** (v0.10.0+) - 质量控制
 - **Bowtie2** (v2.4.5+) - 序列比对
 - **Trimmomatic** (v0.39+) - 序列修剪
-- **Python包**: pandas, numpy, colorama, biopython, importlib-resources
+- **Python包**: pandas, numpy, colorama, biopython...
 
 ## ⚙️ 命令行选项
 
@@ -214,7 +210,6 @@ done
 
 4. **数据类型错误**
    - 确保基因组信息表中的数值列是数值类型，不是字符串
-   - 运行 `python check_and_fix_data.py` 修复数据文件
 
 ### 日志文件
 
@@ -229,9 +224,9 @@ done
 该文件包含微生物基因组信息，用于绝对定量计算。至少需要以下列：
 - `taxonomy_id`: NCBI分类ID（整数）
 - `genome_size`: 基因组大小（整数，单位bp）
-- `Gram.stain`: 革兰氏染色类型（"positive"或"negative"）
+- `Gram.stain`: 革兰氏染色类型（"positive"，"negative"或"varied"）
 
-您可以从NCBI下载完整的基因组信息表，或使用包中提供的示例文件。
+您可以使用包中提供的示例文件（在安装目录内的abs_quant/data目录下），或按照自定义kraken数据库准备并替换。
 
 
 
