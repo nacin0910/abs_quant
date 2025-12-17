@@ -16341,7 +16341,7 @@ taxonomy_id,phylum,class,order,family,genus,species,strain,Gram.stain,genome_siz
 570161,Bacteroidota,Bacteroidia,Marinilabiliales,Marinifilaceae,Marinifilum,Marinifilum fragile,NA,negative,4788252,,,
 570162,Pseudomonadota,Alphaproteobacteria,Maricaulales,Robiginitomaculaceae,Fretibacter,Fretibacter rubidus,NA,negative,3450490,,,
 570277,Pseudomonadota,Gammaproteobacteria,Oceanospirillales,Endozoicomonadaceae,Endozoicomonas,Endozoicomonas montiporae,Endozoicomonas montiporae CL-33,negative,5430256,,,
-570278,Bacillota,Bacilli,Bacillales,Bacillaceae,Allobacillus,Allobacillus halotolerans,Allobacillus halotolerans,positive,2713502.5,,,
+570278,Bacillota,Bacilli,Bacillales,Bacillaceae,Allobacillus,Allobacillus halotolerans,Allobacillus halotolerans,positive,2700297,,,
 57037,Bacillota,Bacilli,Lactobacillales,Lactobacillaceae,Lacticaseibacillus,Lacticaseibacillus zeae,Lacticaseibacillus zeae,positive,3073411,,,
 570416,Bacillota,Bacilli,Bacillales,Bacillaceae,Bacillus,Bacillus thuringiensis,Bacillus thuringiensis serovar kurstaki str. YBT-1520,positive,6550474.5,,,
 570417,Pseudomonadota,Alphaproteobacteria,Rickettsiales,Anaplasmataceae,Wolbachia,Wolbachia endosymbiont of Culex quinquefasciatus,Wolbachia endosymbiont of Culex quinquefasciatus Pel,negative,1482455,,,
