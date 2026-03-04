@@ -1,242 +1,278 @@
 # Absolute Quantification Pipeline for Microbial Metagenomics
 
-一个用于微生物宏基因组绝对定量的生物信息学流程，读入原始FASTQ文件，使用Kneaddata去除人类宿主污染，Kraken2进行物种分类，基于ZymoBIOMICS Spike-in Control进行微生物绝对丰度计算。
+A bioinformatics pipeline for the absolute quantification of microbial metagenomes. It takes raw FASTQ files as input, uses **Kneaddata** to remove human host contamination, applies **Kraken2** for taxonomic classification, and calculates **absolute microbial abundance** based on user‑provided spike‑in information and sample mass.
 
+## 🚀 Quick Start
 
-## 🚀 快速开始
+### 1. Installation
 
-### 1. 安装
-
-#### 通过Conda安装
+#### Via Conda
 
 ```bash
-# 克隆仓库（也可选择下载安装包后解压）
+# Clone the repository
 git clone https://github.com/nacin0910/abs_quant.git
 cd abs_quant
 
-# 创建conda环境
+# Create a conda environment
 conda env create -f environment.yml
 conda activate abs_quant
 
-# 安装包
+# Install the package
 pip install -e .
 ```
 
+### 2. Database Configuration
 
-### 2. 数据库配置
-
-#### 选项A：下载新数据库
+#### Option A: Download a new database
 
 ```bash
-# 下载并构建所有必要数据库
+# Download and build all necessary databases
 abs_quant build --threads 8 \
                 --library bacteria archaea fungi viral \
                 --db /path/to/database
 ```
 
-#### 选项B：使用现有数据库
+#### Option B: Use existing databases
 
 ```bash
-# 如果您已有Kraken2和Kneaddata数据库
+# If you already have Kraken2 and Kneaddata databases
 abs_quant build --threads 8 \
                 --kraken_db /path/to/kraken2_db \
                 --kneaddata_db /path/to/kneaddata_db
 ```
 
-### 3. 运行分析
+### 3. Run Batch Analysis
+
+The pipeline now includes a built‑in batch mode that processes all FASTQ files in a folder. It automatically recognizes paired‑end or single‑end files and resumes from where it left off if interrupted.
 
 ```bash
-abs_quant aq --threads 8 \
-             --read_length 150 \
-             --kraken_db /path/to/kraken2_db \
-             --kneaddata_db /path/to/kneaddata_db \
-             -f sample_R1.fastq.gz sample_R2.fastq.gz \
-             --output results/
+abs_quant batch --threads 8 \
+                --kraken_db /path/to/kraken2_db \
+                --kneaddata_db /path/to/kneaddata_db \
+                --input /path/to/fastq_folder \
+                --output results/ \
+                --spikein_copies 4e7 \
+                --sample_weight 1.0 \
+                --read_threshold 10
 ```
 
-## 📁 输出文件
+> **Note:**  
+> - `--spikein_copies` is the absolute number of spike‑in molecules added to the sample (e.g., `4e7`, `40M`, `40000000`).  
+> - `--sample_weight` is the mass of the sample in grams (wet or dry weight).  
+> - The pipeline automatically detects the read length from the FASTQ files, so you no longer need to provide `--read_length`.
 
-处理完成后，您将获得以下文件：
+## 📁 Output Files
+
+After processing, you will obtain the following structure:
 
 ```
 results/
-├── kneaddata_out/           # Kneaddata处理结果
-│   ├── sample_paired_1.fastq     # 去除宿主后的R1
-│   ├── sample_paired_2.fastq     # 去除宿主后的R2
-│   ├── sample_unmatched_1.fastq
-│   └── sample_unmatched_2.fastq
-├── kraken_out/              # Kraken2和Bracken处理结果
-│   ├── sample.kraken
-│   ├── sample.kreport
-│   └── sample.bracken
-└── sample_abundance.csv     # 绝对丰度结果（主要输出）
+├── merged_absolute_abundance.csv   # Combined absolute abundances for all samples (main output)
+├── merged_relative_abundance.csv    # Combined relative abundances for all samples
+├── sample1/
+│   ├── kneaddata_out/               # Kneaddata intermediate files
+│   ├── kraken_out/                   # Kraken2 and Bracken output
+│   ├── sample1_abundance.csv         # Absolute abundance for this sample
+│   └── sample1_relative_abundance.csv
+├── sample2/
+│   └── ...
+└── ...
 ```
 
-## 📊 绝对定量原理
+- **`merged_absolute_abundance.csv`** – rows represent species (with full taxonomic lineage), columns represent samples; values are **cells per gram**.
+- **`merged_relative_abundance.csv`** – same format, but values are relative abundances (percentage).
+- Each sample folder contains the same two CSV files for that individual sample, as well as all intermediate files from Kneaddata and Kraken2/Bracken.
 
-本流程使用以下两种spike-in细菌进行绝对定量，细胞数均为2 x 10^7 per prep (20 μl)
+## 🔄 Intelligent Resume Feature
 
-| 细菌 | Taxonomy ID | 基因组大小 | 革兰氏染色 |
-|------|-------------|------------|------------|
-| Allobacillus halotolerans | 570278 | 2,700,297 bp | 阳性 |
-| Imtechella halotolerans | 1,165,090 | 3,113,111 bp | 阴性 |
+If a previous run was interrupted, the pipeline automatically checks for existing output files:
 
-**计算公式**：
-- 对于革兰氏阳性菌：`丰度 = 20,000,000 × (reads_x / genome_size_x) / (reads_AH / AH_size)`
-- 对于革兰氏阴性菌：`丰度 = 20,000,000 × (reads_x / genome_size_x) / (reads_IH / IH_size)`
-- 对于未知染色菌：`丰度 = 40,000,000 × (reads_x / genome_size_x) / (reads_AH/AH_size + reads_IH/IH_size)`
-- 如果spike-in的添加量不是20 μl，只需按比例换算（例如：添加了40 μl，则将计算出的绝对丰度×2）
+- If **final abundance files** exist for a sample, the entire sample is skipped.
+- If **Kraken2 `.kraken` and `.kreport` files** are present, it skips Kneaddata and runs only Bracken (if needed).
+- If **Kneaddata output files** exist, it skips Kneaddata and proceeds directly to Kraken2.
 
-## 🔧 依赖软件
+This saves considerable time when re‑running incomplete batches or adding new samples to an existing analysis.
 
-本流程依赖于以下软件，将会在创建conda环境时安装：
+## 📊 Principle of Absolute Quantification
 
-- **Kraken2** (v2.1.2+) - 快速分类器
-- **Bracken** (v2.7+) - 丰度估计
-- **Kneaddata** (v0.10.0+) - 质量控制
-- **Bowtie2** (v2.4.5+) - 序列比对
-- **Trimmomatic** (v0.39+) - 序列修剪
-- **Python包**: pandas, numpy, colorama, biopython...
+The pipeline calculates absolute abundances using the **ZymoBIOMICS Spike‑in Control I**, which contains two bacterial species with known genome sizes. The spike‑in molecules are added to the sample before DNA extraction.
 
-## ⚙️ 命令行选项
+| Bacterium | Taxonomy ID | Genome Size | Gram Stain |
+|-----------|-------------|-------------|------------|
+| *Allobacillus halotolerans* | 570278 | 2,700,297 bp | Positive |
+| *Imtechella halotolerans*  | 1165090 | 3,113,111 bp | Negative |
 
-### `build` 命令
+**Calculation logic**:
+
+1. **Read count to cells**  
+   For a given species, the number of cells is estimated as:  
+   `cell_num_x = (read_length * reads_x) / genome_size_x`
+
+2. **Spike‑in reference**  
+   The total spike‑in cells are the sum of the two spike‑in species:  
+   `total_spikein_cells = cell_num_AH + cell_num_IH`
+
+3. **Absolute abundance (cells/g)**  
+   `abundance_x = (cell_num_x / total_spikein_cells) * spikein_copies / sample_weight`
+
+- If the spike‑in abundance is too low (<0.1%), the pipeline issues a warning and outputs only relative abundances.
+- For species missing in the genome information table (`gram_size_table.csv`), absolute abundance is left blank.
+
+## ⚙️ Command Line Options
+
+### Global Options
+
+```bash
+abs_quant --help
+```
+
+### `build` Command
 
 ```bash
 abs_quant build --help
 
-选项：
-  -t, --threads THREADS   线程数 (默认: 1)
-  -l, --read_length LEN   读取长度，用于Bracken (默认: 150)
-  --library LIB [LIB ...] 要下载的Kraken2库
-  --db DB_DIR             目标数据库路径，将创建并下载到kraken2_AQ和kneaddata_db文件夹
-  --kraken_db KRAKEN_DB   现有Kraken2数据库路径
-  --kneaddata_db KNEAD_DB 现有Kneaddata数据库路径
+Options:
+  -t, --threads THREADS          Number of threads (default: 1)
+  -l, --read_length LEN          Read length for Bracken (default: 150; only used when building new database)
+  --library LIB [LIB ...]        Kraken2 libraries to download (e.g., bacteria archaea viral)
+  --db DB_DIR                    Target database directory (created if it does not exist)
+  --kraken_db KRAKEN_DB          Existing Kraken2 database path
+  --kneaddata_db KNEADDATA_DB    Existing Kneaddata database path
 ```
 
-### `aq` 命令（绝对定量）
+### `process` Command (Single Sample)
 
 ```bash
-abs_quant aq --help
+abs_quant process --help
 
-选项：
-  -t, --threads THREADS    线程数 (必需)
-  -l, --read_length LEN    读取长度 (必需)
-  --kraken_db KRAKEN_DB    Kraken2数据库路径 (必需)
-  --kneaddata_db KNEAD_DB  Kneaddata数据库路径 (必需)
-  -f, --fq_files FQ1 FQ2   FASTQ文件 (R1和R2) (必需)
-  --output OUTPUT_DIR      输出目录 (必需)
+Options:
+  -t, --threads THREADS           Number of threads (required)
+  --kraken_db KRAKEN_DB           Kraken2 database path (required)
+  --kneaddata_db KNEADDATA_DB     Kneaddata database path (required)
+  -f, --fq_files FQ1 [FQ2 ...]    FASTQ file(s). For paired‑end: R1 R2; for single‑end: one file.
+  --output OUTPUT_DIR              Output directory (required)
+  --spikein_copies SPIKEIN_COPIES  **Total number of spike‑in cells added** (sum of both Gram‑positive and Gram‑negative bacteria).  
+                                   For ZymoBIOMICS Spike‑in Control I, 20 μl contains **4×10⁷ cells** (2×10⁷ per species).  
+                                   If you use a different volume, adjust proportionally (e.g., 10 μl → 2×10⁷).
+  --sample_weight SAMPLE_WEIGHT    Sample mass in grams (required)
 ```
 
-## 💡 使用示例
-
-### 示例1：完整分析流程
+### `batch` Command (Batch Processing)
 
 ```bash
-# 1. 下载数据库（首次使用）
-abs_quant build --threads 16 \
-                --library bacteria archaea \
+abs_quant batch --help
+
+Options:
+  -t, --threads THREADS           Number of threads (required)
+  --kraken_db KRAKEN_DB           Kraken2 database path (required)
+  --kneaddata_db KNEADDATA_DB     Kneaddata database path (required)
+  --input INPUT_DIR                Directory containing FASTQ files (required)
+  --output OUTPUT_DIR              Output directory (required)
+  --spikein_copies SPIKEIN_COPIES  Absolute number of spike‑in molecules added (e.g., 4e7)
+  --sample_weight SAMPLE_WEIGHT    Sample mass in grams (required)
+  --read_threshold THRESHOLD       Minimum reads to report in absolute table (default: 10)
+```
+
+## 💡 Usage Examples
+
+### Example 1: Full batch analysis with custom spike‑in
+
+```bash
+abs_quant batch --threads 16 \
+                --kraken_db /home/user/databases/kraken2_AQ \
+                --kneaddata_db /home/user/databases/kneaddata_db \
+                --input /home/user/raw_data \
+                --output /home/user/results \
+                --spikein_copies 4e7 \
+                --sample_weight 0.5 \
+                --read_threshold 10
+```
+
+### Example 2: Process a single sample
+
+```bash
+abs_quant process --threads 8 \
+                  --kraken_db /home/user/databases/kraken2_AQ \
+                  --kneaddata_db /home/user/databases/kneaddata_db \
+                  -f sample_R1.fastq.gz sample_R2.fastq.gz \
+                  --output /home/user/results/sample1 \
+                  --spikein_copies 4e7 \
+                  --sample_weight 1.2
+```
+
+### Example 3: Build a new database
+
+```bash
+abs_quant build --threads 8 \
+                --library bacteria archaea viral \
                 --db /home/user/databases
-
-# 2. 处理多个样本
-for sample in sample1 sample2 sample3; do
-    abs_quant aq --threads 8 \
-                 --read_length 150 \
-                 --kraken_db /home/user/databases/kraken2_AQ \
-                 --kneaddata_db /home/user/databases/kneaddata_db \
-                 -f ${sample}_R1.fastq.gz ${sample}_R2.fastq.gz \
-                 --output results/${sample}
-done
 ```
 
-### 示例2：批量处理脚本
+## 🔍 Results Interpretation
 
-创建一个`run_analysis.sh`脚本：
+### Merged absolute abundance table (`merged_absolute_abundance.csv`)
 
-```bash
-#!/bin/bash
+| Column | Description |
+|--------|-------------|
+| taxonomy_id | NCBI taxonomy ID |
+| phylum, class, order, family, genus, species, strain | Taxonomic lineage (from `gram_size_table.csv`) |
+| *sample_name* | Absolute abundance for that sample (cells/g) |
 
-# 设置参数
-THREADS=8
-READ_LEN=150
-KRAKEN_DB="/path/to/kraken2_db"
-KNEAD_DB="/path/to/kneaddata_db"
-OUTPUT_DIR="results"
+### Merged relative abundance table (`merged_relative_abundance.csv`)
 
-# 处理所有样本
-for r1_file in data/*_R1.fastq.gz; do
-    r2_file="${r1_file/_R1/_R2}"
-    sample=$(basename "${r1_file/_R1*/}")
-    
-    echo "处理样本: ${sample}"
-    
-    abs_quant aq --threads ${THREADS} \
-                 --read_length ${READ_LEN} \
-                 --kraken_db ${KRAKEN_DB} \
-                 --kneaddata_db ${KNEAD_DB} \
-                 -f ${r1_file} ${r2_file} \
-                 --output ${OUTPUT_DIR}/${sample}
-done
-```
+Same format, but values are percentages (relative abundance).
 
-## 🔍 结果解释
+### Individual sample files
 
-输出文件 `sample_abundance.csv` 包含以下列：
+Each sample folder contains two CSV files with the same columns as above, plus an extra column `new_est_reads` (Bracken‑estimated reads) for reference.
 
-| 列名 | 描述 |
-|------|------|
-| name | 物种名称 |
-| taxonomy_id | NCBI分类ID |
-| new_est_reads | Bracken估计的reads数 |
-| abs_abundance | 绝对丰度（细胞数） |
-| relative_abundance | 相对丰度（%，仅当spike-in不足时） |
+## 📦 Dependencies
 
-## 🐛 故障排除
+All dependencies are installed automatically via the conda environment:
 
-### 常见问题
+- **Kraken2** (v2.1.2+)
+- **Bracken** (v2.7+)
+- **Kneaddata** (v0.10.0+)
+- **Bowtie2** (v2.4.5+)
+- **Trimmomatic** (v0.39+)
+- Python packages: pandas, numpy, colorama, biopython
 
-1. **Kraken2数据库下载失败**
-   - 检查网络连接
-   - 确保有足够的磁盘空间（~100GB）
-   - 尝试单个库下载：`--library bacteria`
+## 📝 Data File Description
 
-2. **内存不足**
-   - 减少线程数：`--threads 4`
-   - 增加系统交换空间
+### `gram_size_table.csv`
 
-3. **Spike-in检测不到**
-   - 检查样本中是否添加了ZymoBIOMICS Spike-in Control
-   - 检查spike-in浓度是否合适
+This file must be located in the `abs_quant/data/` directory of the installed package. It contains microbial genome information used for absolute quantification calculations. The required columns are:
 
-4. **数据类型错误**
-   - 确保基因组信息表中的数值列是数值类型，不是字符串
+- `taxonomy_id` – NCBI taxonomy ID (integer)
+- `phylum, class, order, family, genus, species, strain` – taxonomic classification (optional but recommended)
+- `genome_size` – genome size in base pairs (integer)
+- `Gram.stain` – Gram stain type (`positive`, `negative`, or `varied`)
 
-### 日志文件
+If your custom Kraken2 database contains species not present in this table, the pipeline will issue warnings and skip absolute quantification for those species.
 
-所有步骤都生成日志文件，位于：
-- 数据库构建：`database_dir/log/`
-- 样本处理：`output_dir/`（标准输出）
+## 🐛 Troubleshooting
 
-## 📝 数据文件说明
+### Common Issues
 
-### gram_size_table.csv
+| Problem | Solution |
+|---------|----------|
+| Kraken2 database download fails | Check network connection; ensure enough disk space (~100 GB); download libraries individually. |
+| Out of memory | Reduce threads (`--threads 4`) or increase swap space. |
+| Spike‑in not detected | Verify that the ZymoBIOMICS Spike‑in was added; check concentration. |
+| Column errors in output | Ensure `gram_size_table.csv` contains the required columns. |
+| Pipeline hangs | Look at log files in the sample output directory; use `--read_threshold` to filter low‑abundance species. |
 
-该文件包含微生物基因组信息，用于绝对定量计算。至少需要以下列：
-- `taxonomy_id`: NCBI分类ID（整数）
-- `genome_size`: 基因组大小（整数，单位bp）
-- `Gram.stain`: 革兰氏染色类型（"positive"，"negative"或"varied"）
+### Log Files
 
-您可以使用包中提供的示例文件（在安装目录内的abs_quant/data目录下），或按照自定义kraken数据库准备并替换。
+- Database building logs are stored in `database_dir/log/`
+- Sample processing logs are printed to the console and can be redirected to a file.
 
+## 📚 References
 
+1. Wood DE, Lu J, Langmead B. Improved metagenomic analysis with Kraken 2. *Genome Biology*. 2019;20:257.
+2. Lu J, Breitwieser FP, Thielen P, Salzberg SL. Bracken: estimating species abundance in metagenomics data. *PeerJ Computer Science*. 2017;3:e104.
+3. ZymoBIOMICS Spike‑in Control I Technical Manual.
 
-## 📚 参考文献
+## 📧 Contact
 
-1. Wood DE, Lu J, Langmead B. Improved metagenomic analysis with Kraken 2. Genome Biology. 2019;20:257.
-2. Lu J, Breitwieser FP, Thielen P, Salzberg SL. Bracken: estimating species abundance in metagenomics data. PeerJ Computer Science. 2017;3:e104.
-3. ZymoBIOMICS Spike-in Control I Technical Manual
-
-## 📧 联系方式
-
-NI Can - nican0910@connect.hku.hk
-
+NI Can – nican0910@connect.hku.hk
